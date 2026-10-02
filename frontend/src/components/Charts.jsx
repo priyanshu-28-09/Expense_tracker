@@ -1,97 +1,136 @@
 import React from 'react';
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts/es6';
 
-const palette = ['bg-teal-500', 'bg-sky-500', 'bg-amber-500', 'bg-rose-500', 'bg-violet-500'];
+const chartColors = ['#197d69', '#e5a33a', '#467aa1', '#db705f', '#6b8c5a', '#8770a6'];
+const formatCurrency = (value) => `₹${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 
-export const ExpensePie = ({ data = [] }) => {
-  const total = data.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-
-  if (!data.length) {
-    return (
-      <div className="h-56 bg-white rounded shadow flex items-center justify-center">
-        <div className="text-sm text-gray-500">No expense categories yet</div>
-      </div>
-    );
-  }
+const ChartTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
 
   return (
-    <div className="space-y-3">
-      {data.map((item, index) => {
-        const ratio = total ? Math.round((item.amount / total) * 100) : 0;
-        return (
-          <div key={item.category || index} className="flex items-center gap-3">
-            <div className={`w-3 h-3 rounded ${palette[index % palette.length]}`} />
-            <div className="flex-1">
-              <div className="flex justify-between text-sm font-medium text-slate-700">
-                <span>{item.category}</span>
-                <span>{ratio}%</span>
-              </div>
-              <div className="h-2 bg-slate-200 rounded overflow-hidden mt-1">
-                <div className={`h-full rounded ${palette[index % palette.length]}`} style={{ width: `${ratio}%` }} />
-              </div>
-            </div>
-          </div>
-        );
-      })}
+    <div className="rounded border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg">
+      {label && <div className="mb-1 font-medium text-slate-700">{label}</div>}
+      {payload.map((entry) => (
+        <div key={entry.dataKey} className="flex items-center justify-between gap-4 text-slate-600">
+          <span>{entry.name || entry.dataKey}</span>
+          <span className="font-semibold text-slate-900">{formatCurrency(entry.value)}</span>
+        </div>
+      ))}
     </div>
   );
 };
 
-export const IncomeExpenseBar = ({ income = 0, expense = 0, series = [] }) => {
-  if (series && series.length) {
-    const max = Math.max(...series.map((s) => Math.max(s.income || 0, s.expense || 0)), 1);
-    return (
-      <div className="space-y-3">
-        <div className="flex gap-2 items-end">
-          {series.map((s) => {
-            const inHeight = Math.round(((s.income || 0) / max) * 100);
-            const exHeight = Math.round(((s.expense || 0) / max) * 100);
-            return (
-              <div key={s.date} className="flex flex-col items-center text-xs text-slate-600">
-                <div className="flex flex-col items-center gap-1">
-                  <div className="w-6 h-16 relative flex items-end">
-                    <div className="w-full bg-emerald-400" style={{ height: `${inHeight}%`, borderRadius: '4px 4px 0 0' }} />
-                    <div className="w-full bg-rose-400" style={{ height: `${exHeight}%`, marginTop: -Math.min(inHeight, exHeight) ? `${Math.min(inHeight, exHeight) * -1}%` : '0' }} />
-                  </div>
-                </div>
-                <div className="mt-2">{s.label}</div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="text-sm text-slate-500">Income (green) vs Expense (red)</div>
-      </div>
-    );
-  }
+const ChartEmpty = () => (
+  <div className="flex h-56 items-center justify-center text-sm text-slate-500">
+    Add transactions to see this chart.
+  </div>
+);
 
-  const maxValue = Math.max(income, expense, 1);
-  const incomeRatio = Math.round((income / maxValue) * 100);
-  const expenseRatio = Math.round((expense / maxValue) * 100);
+export const MonthlyExpensesChart = ({ data = [] }) => {
+  if (!data.some((item) => Number(item.amount) > 0)) return <ChartEmpty />;
 
   return (
-    <div className="space-y-4">
-      <div className="text-sm text-slate-500">This month performance</div>
-      <div className="space-y-3">
-        <div>
-          <div className="flex justify-between text-sm mb-1">
-            <span className="font-medium text-slate-700">Income</span>
-            <span className="text-slate-500">${income.toFixed(2)}</span>
-          </div>
-          <div className="h-3 bg-slate-200 rounded overflow-hidden">
-            <div className="h-full bg-emerald-500 rounded" style={{ width: `${incomeRatio}%` }} />
-          </div>
-        </div>
-        <div>
-          <div className="flex justify-between text-sm mb-1">
-            <span className="font-medium text-slate-700">Expense</span>
-            <span className="text-slate-500">${expense.toFixed(2)}</span>
-          </div>
-          <div className="h-3 bg-slate-200 rounded overflow-hidden">
-            <div className="h-full bg-rose-500 rounded" style={{ width: `${expenseRatio}%` }} />
-          </div>
-        </div>
-      </div>
+    <div className="h-60 w-full" aria-label="Monthly expense trend">
+      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 240, height: 240 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+          <defs>
+            <linearGradient id="expenseFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#197d69" stopOpacity={0.22} />
+              <stop offset="100%" stopColor="#197d69" stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke="#e8ecea" strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64736e', fontSize: 12 }} />
+          <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64736e', fontSize: 11 }} tickFormatter={(value) => `₹${value >= 1000 ? `${Math.round(value / 1000)}k` : value}`} />
+          <Tooltip content={<ChartTooltip />} />
+          <Area type="monotone" dataKey="amount" name="Expenses" stroke="#197d69" strokeWidth={2.5} fill="url(#expenseFill)" activeDot={{ r: 5 }} />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   );
 };
 
-export default null;
+export const CategoryExpensesChart = ({ data = [] }) => {
+  const visibleData = [...data].sort((a, b) => Number(b.amount) - Number(a.amount)).slice(0, 7);
+  if (!visibleData.some((item) => Number(item.amount) > 0)) return <ChartEmpty />;
+
+  return (
+    <div className="h-60 w-full" aria-label="Expense by category">
+      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 240, height: 240 }}>
+        <BarChart data={visibleData} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
+          <CartesianGrid stroke="#e8ecea" strokeDasharray="3 3" horizontal={false} />
+          <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#64736e', fontSize: 11 }} tickFormatter={(value) => `₹${value >= 1000 ? `${Math.round(value / 1000)}k` : value}`} />
+          <YAxis type="category" dataKey="category" width={86} axisLine={false} tickLine={false} tick={{ fill: '#46544f', fontSize: 11 }} />
+          <Tooltip content={<ChartTooltip />} />
+          <Bar dataKey="amount" name="Expenses" fill="#467aa1" radius={[0, 3, 3, 0]} barSize={14} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+export const IncomeExpenseChart = ({ income = 0, expense = 0 }) => {
+  const data = [{ period: 'This month', income: Number(income || 0), expense: Number(expense || 0) }];
+  if (data[0].income === 0 && data[0].expense === 0) return <ChartEmpty />;
+
+  return (
+    <div className="h-60 w-full" aria-label="Income compared with expenses">
+      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 240, height: 240 }}>
+        <BarChart data={data} margin={{ top: 8, right: 12, left: -12, bottom: 0 }} barGap={10}>
+          <CartesianGrid stroke="#e8ecea" strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{ fill: '#64736e', fontSize: 12 }} />
+          <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64736e', fontSize: 11 }} tickFormatter={(value) => `₹${value >= 1000 ? `${Math.round(value / 1000)}k` : value}`} />
+          <Tooltip content={<ChartTooltip />} />
+          <Legend iconType="circle" wrapperStyle={{ fontSize: 12, color: '#64736e' }} />
+          <Bar dataKey="income" name="Income" fill="#197d69" radius={[3, 3, 0, 0]} barSize={30} />
+          <Bar dataKey="expense" name="Expenses" fill="#db705f" radius={[3, 3, 0, 0]} barSize={30} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+export const PaymentMethodChart = ({ data = {} }) => {
+  const chartData = Object.entries(data).map(([name, value]) => ({ name, value: Number(value || 0) })).filter((item) => item.value > 0);
+  if (!chartData.length) return <ChartEmpty />;
+
+  return (
+    <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(110px,0.9fr)]">
+      <div className="h-52 min-w-0" aria-label="Expense by payment method">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 240, height: 240 }}>
+          <PieChart>
+            <Pie data={chartData} dataKey="value" nameKey="name" innerRadius="56%" outerRadius="82%" paddingAngle={2} stroke="none">
+              {chartData.map((entry, index) => <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />)}
+            </Pie>
+            <Tooltip content={<ChartTooltip />} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="space-y-2">
+        {chartData.map((item, index) => (
+          <div key={item.name} className="flex items-center justify-between gap-2 text-xs">
+            <span className="flex min-w-0 items-center gap-2 text-slate-600">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
+              <span className="truncate">{item.name}</span>
+            </span>
+            <span className="shrink-0 font-medium text-slate-800">{formatCurrency(item.value)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};

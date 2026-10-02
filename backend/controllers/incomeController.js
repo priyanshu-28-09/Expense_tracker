@@ -1,4 +1,6 @@
 import incomeModel from "../models/incomeModel.js";
+import Transaction from "../models/transactionModel.js";
+import { upsertLinkedTransaction } from "../services/transactionService.js";
 import XLSX from "xlsx";
 import getDateRange from "../utils/dateFilter.js";
 
@@ -24,6 +26,26 @@ export async function addIncome(req, res) {
     });
 
     await newIncome.save();
+
+    await upsertLinkedTransaction(userId, {
+      type: "income",
+      amount: newIncome.amount,
+      currency: "INR",
+      category: newIncome.category || "Uncategorized",
+      description: newIncome.description,
+      merchant: newIncome.description,
+      paymentMethod: "Other",
+      source: "Manual",
+      sourceApplication: "",
+      transactionDate: newIncome.date,
+      transactionTime: "",
+      transactionId: "",
+      referenceId: "",
+      sourceTransactionId: `manual-income-${newIncome._id}`,
+      status: "completed",
+      notes: "",
+      importedAt: new Date(),
+    });
 
     res.status(201).json({
       success: true, // ✅ FIXED
@@ -69,7 +91,7 @@ export async function updateIncome(req, res) {
     const updatedIncome = await incomeModel.findOneAndUpdate(
       { _id: id, userId },
       { description, amount, category, date },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!updatedIncome) { // ✅ FIXED
@@ -78,6 +100,18 @@ export async function updateIncome(req, res) {
         message: "Income not found",
       });
     }
+
+    await upsertLinkedTransaction(userId, {
+      type: "income",
+      description: updatedIncome.description,
+      merchant: updatedIncome.description,
+      amount: updatedIncome.amount,
+      transactionDate: updatedIncome.date,
+      category: updatedIncome.category || "Uncategorized",
+      source: "Manual",
+      sourceTransactionId: `manual-income-${updatedIncome._id}`,
+      status: "completed",
+    });
 
     res.json({
       success: true,
@@ -104,6 +138,11 @@ export async function deleteIncome(req, res) {
         message: "Income not found",
       });
     }
+
+    await Transaction.findOneAndDelete({
+      userId: income.userId,
+      sourceTransactionId: `manual-income-${income._id}`,
+    });
 
     return res.json({ // ✅ FIXED
       success: true,

@@ -2,8 +2,7 @@ import validator from "validator";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
-
-const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret_here";
+import JWT_SECRET from "../config/security.js";
 const TOKEN_EXPIRES = "24h";
 
 // Create JWT Token

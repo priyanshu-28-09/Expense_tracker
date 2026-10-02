@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import API from '../api/axiosInstance';
 import AddExpenseForm from '../components/AddExpenseForm';
 import TransactionTable from '../components/TransactionTable';
 
 const Expense = () => {
+  const location = useLocation();
   const [items, setItems] = useState([]);
   const [error, setError] = useState(null);
 
@@ -24,6 +26,14 @@ const Expense = () => {
     loadItems();
   }, []);
 
+  useEffect(() => {
+    if (location.hash !== '#add-expense') return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('add-expense')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.hash]);
+
   const refreshApp = () => {
     window.dispatchEvent(new Event('app-data-updated'));
   };
@@ -38,7 +48,7 @@ const Expense = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div id="add-expense" className="scroll-mt-5">
           <h1 className="text-3xl font-semibold text-slate-900">Expense</h1>
           <p className="text-sm text-slate-500">Record your spending and stay on budget.</p>
         </div>

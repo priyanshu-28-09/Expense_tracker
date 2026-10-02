@@ -1,4 +1,6 @@
 import expenseModel from "../models/expenseModel.js";
+import Transaction from "../models/transactionModel.js";
+import { upsertLinkedTransaction } from "../services/transactionService.js";
 import getDateRange from "../utils/dateFilter.js";
 import XLSX from 'xlsx';
 
@@ -24,6 +26,26 @@ export async function addExpense(req, res) {
         });
 
         await newExpense.save();
+
+        await upsertLinkedTransaction(userId, {
+            type: "expense",
+            amount: newExpense.amount,
+            currency: "INR",
+            category: newExpense.category || "Uncategorized",
+            description: newExpense.description,
+            merchant: newExpense.description,
+            paymentMethod: "Other",
+            source: "Manual",
+            sourceApplication: "",
+            transactionDate: newExpense.date,
+            transactionTime: "",
+            transactionId: "",
+            referenceId: "",
+            sourceTransactionId: `manual-expense-${newExpense._id}`,
+            status: "completed",
+            notes: "",
+            importedAt: new Date(),
+        });
 
         res.json({
             success: true,
@@ -66,7 +88,7 @@ const userId = req.user._id;
         const updatedExpense = await expenseModel.findOneAndUpdate(
             {_id: id, userId},
             {description, amount},
-            {new: true}
+            {returnDocument: "after"}
         );
         if(!updatedExpense){
             return res.status(404).json({
@@ -74,6 +96,19 @@ const userId = req.user._id;
                 message: " expense not fount"
             });
         }
+
+        await upsertLinkedTransaction(userId, {
+            type: "expense",
+            description: updatedExpense.description,
+            merchant: updatedExpense.description,
+            amount: updatedExpense.amount,
+            transactionDate: updatedExpense.date,
+            category: updatedExpense.category || "Uncategorized",
+            source: "Manual",
+            sourceTransactionId: `manual-expense-${updatedExpense._id}`,
+            status: "completed",
+        });
+
         res.json({
             success: true,
             message: "expense updated successfully",
@@ -100,6 +135,12 @@ const userId = req.user._id;
                 message: " expense not found"
             });
         }
+
+        await Transaction.findOneAndDelete({
+            userId: expense.userId,
+            sourceTransactionId: `manual-expense-${expense._id}`,
+        });
+
         return res.json({
             success: true,
             message:"expense deleted successfully"

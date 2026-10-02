@@ -1,10 +1,11 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 
-const Sidebar = ({ className = '' }) => {
+const Sidebar = ({ className = '', onNavigate }) => {
   const link = (to, label) => (
     <NavLink
       to={to}
+      onClick={onNavigate}
       className={({ isActive }) =>
         `block px-4 py-2 rounded hover:bg-gray-100 ${isActive ? 'bg-gray-100 font-semibold' : ''}`
       }
