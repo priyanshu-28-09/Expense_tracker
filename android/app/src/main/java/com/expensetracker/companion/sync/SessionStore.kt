@@ -14,16 +14,19 @@ import javax.crypto.spec.GCMParameterSpec
 class SessionStore(context: Context) {
     private val preferences = context.getSharedPreferences("session", Context.MODE_PRIVATE)
 
-    fun save(baseUrl: String, token: String) {
+    fun save(baseUrl: String, token: String, accountUserId: String? = null) {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val encrypted = cipher.doFinal(token.toByteArray(Charsets.UTF_8))
         val stored = Base64.encodeToString(cipher.iv + encrypted, Base64.NO_WRAP)
         preferences.edit().putString(BASE_URL_KEY, normalizeBaseUrl(baseUrl))
-            .putString(TOKEN_KEY, stored).apply()
+            .putString(TOKEN_KEY, stored)
+            .also { editor -> accountUserId?.let { editor.putString(ACCOUNT_USER_ID_KEY, it) } }
+            .apply()
     }
 
     fun baseUrl(): String? = preferences.getString(BASE_URL_KEY, null)
+    fun accountUserId(): String? = preferences.getString(ACCOUNT_USER_ID_KEY, null)
 
     fun token(): String? = runCatching {
         val stored = preferences.getString(TOKEN_KEY, null) ?: return null
@@ -79,5 +82,6 @@ class SessionStore(context: Context) {
         const val TAG_LENGTH_BITS = 128
         const val BASE_URL_KEY = "base_url"
         const val TOKEN_KEY = "encrypted_token"
+        const val ACCOUNT_USER_ID_KEY = "account_user_id"
     }
 }

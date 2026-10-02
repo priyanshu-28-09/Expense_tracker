@@ -1,18 +1,19 @@
 # Expense Tracker
 
-MERN expense tracker with a separate Kotlin Android companion. The Android app does not replace the React website.
+MERN expense tracker with an existing Kotlin Android companion and a separate Flutter mobile application. The Flutter app does not replace the React website or standalone Kotlin app.
 
 ## Architecture
 
 - `frontend/`: React 19 + Vite dashboard. It reads the Express API and polls the dashboard and transaction list every 15 seconds while the tab is visible.
 - `backend/`: Express API, JWT authentication, Mongoose validation/normalization, merchant categorization, deduplication, and MongoDB persistence.
 - `android/`: Android Studio/Kotlin app using Compose and a ViewModel. Android's user-granted `NotificationListenerService` routes supported package notifications to provider parsers, then a normalizer writes only transaction fields to a local queue. WorkManager waits for network connectivity and retries HTTPS uploads.
+- `mobile/`: Flutter/Dart application with Provider state, secure JWT storage, dashboard, transactions, manual entry, analytics, and profile/device screens. Its Android host compiles and reuses the notification/parser/queue/session/WorkManager Kotlin sources from `android/` and connects to them through a MethodChannel. It does not replace or delete the standalone Kotlin app.
 - Android uploads one transaction at a time to authenticated `POST /api/mobile/transactions`. The backend assigns the owner from the JWT, processes validation/categorization/deduplication, saves the record, and returns its transaction ID. Device ID/name are sent in headers; the backend records `userId` and `lastSyncAt`.
 
 ```text
 Android notification -> parser -> normalized local queue -> WorkManager (connected network)
   -> HTTPS POST /api/mobile/transactions -> auth -> normalize/category/dedupe -> MongoDB
-  -> React dashboard polling
+  -> React dashboard polling and Flutter API refresh
 ```
 
 ## Prerequisites
@@ -20,6 +21,7 @@ Android notification -> parser -> normalized local queue -> WorkManager (connect
 - Node.js and npm versions compatible with the installed Vite 8 toolchain.
 - MongoDB, either local or a managed deployment.
 - JDK 17, Android Studio, and Android SDK Platform 35 for the companion app.
+- Flutter stable SDK and Android toolchain for `mobile/`.
 - A TLS endpoint for the API when connecting from Android. The Express process listens on HTTP; deploy it behind a trusted HTTPS reverse proxy/load balancer. The Android app rejects HTTP and redirects.
 
 ## Environment
@@ -34,6 +36,8 @@ Copy `backend/.env.example` to `backend/.env` and set:
 Copy `frontend/.env.example` to `frontend/.env.local` as needed:
 
 - `VITE_API_BASE_URL`: API base including `/api`. Local browser development defaults to `http://localhost:4000/api`; production must use the HTTPS API origin.
+
+The Flutter app receives its API base through `--dart-define=API_BASE_URL=...`. Use an HTTPS URL ending in `/api`; no production host or secret is compiled into Dart source. Android notification uploads use the corresponding HTTPS origin through the native Kotlin client.
 
 Do not commit `.env` files, credentials, JWTs, or production connection strings. Android asks for the API URL and Expense Tracker account login at runtime; it does not contain backend credentials or a production URL.
 
@@ -70,6 +74,33 @@ To run parser tests:
 android\gradlew.bat :app:testDebugUnitTest
 ```
 
+This remains the standalone Kotlin companion and is not overwritten by Flutter.
+
+## Flutter Mobile Setup
+
+Install Flutter stable and Android Studio, then verify the local toolchain:
+
+```powershell
+flutter doctor
+Set-Location mobile
+flutter pub get
+flutter test
+```
+
+Run a development build with the HTTPS development API base:
+
+```powershell
+flutter run --dart-define=API_BASE_URL=https://dev-api.example.test/api
+```
+
+Build a release with the production API base supplied at build time:
+
+```powershell
+flutter build appbundle --release --dart-define=API_BASE_URL=https://api.example.com/api
+```
+
+The Flutter app authenticates with the existing `/api/user/login` endpoint and stores only the returned JWT in platform secure storage. The Android MethodChannel sends that JWT to the reused Kotlin session store, which encrypts it with Android Keystore and resumes queued notification sync. The mock action runs the existing PhonePe parser using mock text; it does not require a real notification or grant.
+
 To test offline behavior, use a test backend and mock notification, disable network, verify the transaction remains queued, then restore connectivity. WorkManager retries after the network constraint is met. An item is removed only after the backend acknowledges insert or duplicate. Retries reuse the same `sourceTransactionId`; notification fingerprints without a reference ID use transaction fields and the notification minute.
 
 ## Notification Access
@@ -81,6 +112,7 @@ PhonePe, Google Pay, Paytm, BHIM, and selected bank package identifiers have ind
 ## Testing
 
 - Android mock parser tests: `android\gradlew.bat :app:testDebugUnitTest` (requires Android SDK Platform 35).
+- Flutter model/widget tests: `Set-Location mobile; flutter test` (requires Flutter SDK).
 - Backend API tests: `npm --prefix backend test` (requires `MONGO_URI`; the suite is skipped when it is unset).
 - Frontend checks: `npm --prefix frontend run lint` and `npm --prefix frontend run build`.
 - The backend integration suite covers authenticated ownership, duplicate uploads, device registration, merchant categorization, and existing manual, CSV, refund, and transfer transaction flows.
@@ -94,7 +126,8 @@ Use mock accounts and mock notification data for testing. Do not use bank logins
 2. Put Express behind HTTPS termination and set `CORS_ORIGIN` to the exact deployed frontend origin(s); production startup fails without it.
 3. Build the frontend with `VITE_API_BASE_URL` set to the HTTPS API base.
 4. Configure the Android app with the HTTPS API origin. Cleartext traffic is disabled; do not weaken it to connect to a production API.
-5. Create required MongoDB indexes and verify API tests against a dedicated test database before release.
+5. Build Flutter with `API_BASE_URL` set to the HTTPS API base using `--dart-define`; do not embed tokens or passwords in build defines.
+6. Create required MongoDB indexes and verify API tests against a dedicated test database before release.
 
 ## Security and Privacy
 

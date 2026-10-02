@@ -39,6 +39,13 @@ class SyncManager(context: Context) {
             recordMessage("Nothing to sync")
             return SyncStatus("Nothing to sync", lastStatus().syncedAt)
         }
+        val accountUserId = session.accountUserId()
+        if (accountUserId != null) {
+            if (queue.ownerUserIds().any { it != accountUserId }) {
+                throw IllegalStateException("Pending notifications belong to another Expense Tracker account.")
+            }
+            queue.assignUnownedItems(accountUserId)
+        }
 
         val deviceId = devicePreferences.getString("id", null) ?: UUID.randomUUID().toString().also {
             devicePreferences.edit().putString("id", it).apply()

@@ -20,6 +20,7 @@ const { default: mobileRouter } = await import("../routes/mobileRoute.js");
 const { default: dashboardRouter } = await import("../routes/dashboardRoute.js");
 const { default: expenseRouter } = await import("../routes/expenseRoute.js");
 const { default: incomeRouter } = await import("../routes/incomeRoute.js");
+const { default: userRouter } = await import("../routes/userRoute.js");
 
 test("transaction APIs enforce auth, ownership, validation, and deduplication", { skip: !process.env.MONGO_URI }, async (t) => {
   await connectDB();
@@ -36,6 +37,7 @@ test("transaction APIs enforce auth, ownership, validation, and deduplication", 
   app.use("/api/dashboard", dashboardRouter);
   app.use("/api/expense", expenseRouter);
   app.use("/api/income", incomeRouter);
+  app.use("/api/user", userRouter);
   const server = app.listen(0);
   await once(server, "listening");
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -51,6 +53,7 @@ test("transaction APIs enforce auth, ownership, validation, and deduplication", 
 
   let ownedId;
   let otherId;
+  let registeredUserId;
   try {
     const otherTransaction = await Transaction.create({
       userId: otherUser._id,
@@ -60,6 +63,61 @@ test("transaction APIs enforce auth, ownership, validation, and deduplication", 
       description: "Private transaction",
     });
     otherId = otherTransaction._id.toString();
+
+    await t.test("existing registration and login endpoints return the documented JWT session", async () => {
+      const email = `flutter-auth-${suffix}@example.test`;
+      const emptyRegistration = await request("/api/user/register", { method: "POST", body: {} });
+      assert.equal(emptyRegistration.status, 400);
+
+      const invalidEmail = await request("/api/user/register", {
+        method: "POST",
+        body: { name: "Flutter Test", email: "invalid-email", password: "secure-test-password" },
+      });
+      assert.equal(invalidEmail.status, 400);
+
+      const registration = await request("/api/user/register", {
+        method: "POST",
+        body: { name: "Flutter Test", email, password: "secure-test-password" },
+      });
+      assert.equal(registration.status, 201);
+      const registered = await registration.json();
+      assert.equal(registered.success, true);
+      assert.ok(registered.token);
+      assert.deepEqual(Object.keys(registered.user).sort(), ["email", "id", "name"]);
+      registeredUserId = registered.user.id;
+
+      const duplicateEmail = await request("/api/user/register", {
+        method: "POST",
+        body: { name: "Flutter Test", email, password: "secure-test-password" },
+      });
+      assert.equal(duplicateEmail.status, 409);
+
+      const emptyLogin = await request("/api/user/login", { method: "POST", body: {} });
+      assert.equal(emptyLogin.status, 400);
+      const wrongPassword = await request("/api/user/login", {
+        method: "POST",
+        body: { email, password: "wrong-password" },
+      });
+      assert.equal(wrongPassword.status, 401);
+
+      const login = await request("/api/user/login", {
+        method: "POST",
+        body: { email, password: "secure-test-password" },
+      });
+      assert.equal(login.status, 200);
+      const loggedIn = await login.json();
+      assert.equal(loggedIn.success, true);
+      assert.equal(loggedIn.user.id, registeredUserId);
+      assert.ok(loggedIn.token);
+
+      const currentUser = await request("/api/user/me", { auth: loggedIn.token });
+      assert.equal(currentUser.status, 200);
+      assert.equal((await currentUser.json()).user.email, email);
+
+      const expiredToken = jwt.sign({ id: primaryUser._id }, secret, { expiresIn: "-1s" });
+      const expiredSession = await request("/api/user/me", { auth: expiredToken });
+      assert.equal(expiredSession.status, 401);
+    });
 
     await t.test("all requested endpoints require authentication", async () => {
       const protectedRequests = [
@@ -483,7 +541,7 @@ test("transaction APIs enforce auth, ownership, validation, and deduplication", 
     await Device.deleteMany({ userId: { $in: [primaryUser._id, otherUser._id] } });
     await expenseModel.deleteMany({ userId: { $in: [primaryUser._id, otherUser._id] } });
     await incomeModel.deleteMany({ userId: { $in: [primaryUser._id, otherUser._id] } });
-    await User.deleteMany({ _id: { $in: [primaryUser._id, otherUser._id] } });
+    await User.deleteMany({ _id: { $in: [primaryUser._id, otherUser._id, registeredUserId].filter(Boolean) } });
     await mongoose.disconnect();
   }
 });

@@ -19,11 +19,11 @@ class NotificationQueue(context: Context) {
     private val preferences = context.getSharedPreferences("normalized_queue", Context.MODE_PRIVATE)
 
     @Synchronized
-    fun enqueue(transaction: NormalizedTransaction) {
+    fun enqueue(transaction: NormalizedTransaction, ownerUserId: String? = null) {
         val current = read()
         if ((0 until current.length()).any { current.optJSONObject(it)?.optString("sourceTransactionId") == transaction.sourceTransactionId }) return
         if (current.length() >= MAX_QUEUE_SIZE) current.remove(0)
-        current.put(transaction.toJson())
+        current.put(transaction.toJson().put(OWNER_USER_ID_KEY, ownerUserId))
         preferences.edit().putString(QUEUE_KEY, current.toString()).apply()
     }
 
@@ -74,12 +74,35 @@ class NotificationQueue(context: Context) {
         return removed
     }
 
+    @Synchronized
+    fun ownerUserIds(): Set<String> {
+        val current = read()
+        return (0 until current.length()).mapNotNull { index ->
+            current.optJSONObject(index)?.optString(OWNER_USER_ID_KEY)?.takeIf(String::isNotBlank)
+        }.toSet()
+    }
+
+    @Synchronized
+    fun assignUnownedItems(ownerUserId: String) {
+        val current = read()
+        var changed = false
+        for (index in 0 until current.length()) {
+            val item = current.optJSONObject(index) ?: continue
+            if (item.isNull(OWNER_USER_ID_KEY)) {
+                item.put(OWNER_USER_ID_KEY, ownerUserId)
+                changed = true
+            }
+        }
+        if (changed) preferences.edit().putString(QUEUE_KEY, current.toString()).apply()
+    }
+
     private fun read(): JSONArray = runCatching {
         JSONArray(preferences.getString(QUEUE_KEY, "[]"))
     }.getOrDefault(JSONArray())
 
     private companion object {
         const val QUEUE_KEY = "transactions"
+        const val OWNER_USER_ID_KEY = "queueOwnerUserId"
         const val MAX_QUEUE_SIZE = 500
     }
 }

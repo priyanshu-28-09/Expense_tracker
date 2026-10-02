@@ -9,6 +9,7 @@ import android.util.Log
 import com.expensetracker.companion.parser.NotificationInput
 import com.expensetracker.companion.parser.NotificationParser
 import com.expensetracker.companion.parser.TransactionNormalizer
+import com.expensetracker.companion.sync.SessionStore
 import com.expensetracker.companion.sync.TransactionSyncScheduler
 
 class PaymentNotificationListener : NotificationListenerService() {
@@ -35,7 +36,8 @@ class PaymentNotificationListener : NotificationListenerService() {
             Log.d(TAG, "Ignored unsupported or ambiguous payment notification.")
             return
         }
-        NotificationQueue(applicationContext).enqueue(transactionNormalizer.normalize(parsed))
+        val sessionStore = SessionStore(applicationContext)
+        NotificationQueue(applicationContext).enqueue(transactionNormalizer.normalize(parsed), sessionStore.accountUserId())
         NotificationQueueEvents.notifyChanged()
         TransactionSyncScheduler.enqueue(applicationContext)
     }

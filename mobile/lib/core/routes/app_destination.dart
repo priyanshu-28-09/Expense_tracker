@@ -1,0 +1,1 @@
+enum AppDestination { dashboard, transactions, add, analytics, profile }
